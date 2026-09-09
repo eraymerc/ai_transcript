@@ -1,0 +1,2318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speech-to-Text Editor</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9; --panel: #fff; --border: #d9dde3; --text: #1a1d21;
+    --muted: #6b7280; --accent: #2563eb; --accent-text: #fff;
+    --ok: #15803d; --err: #b91c1c; --track: #e5e7eb; --hover: #eef1f5;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181d; --panel: #1e2126; --border: #333842; --text: #e6e8ea;
+      --muted: #9aa3af; --accent: #3b82f6; --ok: #4ade80; --err: #f87171;
+      --track: #2b3038; --hover: #262a31;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 18px; }
+
+  nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+  nav button {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    padding: 8px 14px; font: inherit; color: var(--muted); cursor: pointer;
+  }
+  nav button[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
+  nav .count {
+    display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px;
+    border-radius: 999px; background: var(--track); color: var(--muted); font-size: 11px;
+  }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 0 0 12px; font-weight: 600;
+  }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .head h2 { margin: 0; }
+  .head .btns { display: flex; gap: 8px; }
+
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text] {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12px;
+  }
+  select {
+    padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font: inherit; font-size: 12px;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+  .row > div { flex: 1 1 240px; min-width: 0; }
+  .row > .fit { flex: 0 0 auto; }
+
+  button.b {
+    padding: 7px 14px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); font: inherit; font-size: 13px;
+    cursor: pointer; white-space: nowrap;
+  }
+  button.b:hover:not(:disabled) { border-color: var(--accent); }
+  button.b:disabled { opacity: .5; cursor: default; }
+  button.b.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button.b.small { padding: 4px 9px; font-size: 12px; }
+
+  .opts { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .opts label { display: flex; gap: 7px; align-items: center; margin: 0; font-size: 13px; color: var(--text); }
+  .fmt { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); font-weight: 600; padding: 0 8px 8px; border-bottom: 1px solid var(--border);
+  }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .name { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .path { font-family: var(--mono); font-size: 10.5px; color: var(--muted); word-break: break-all; }
+  .num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .act { text-align: right; white-space: nowrap; }
+
+  .tag {
+    display: inline-block; padding: 1px 7px; border-radius: 999px;
+    font-size: 11px; border: 1px solid var(--border); color: var(--muted);
+  }
+  .tag.ok { color: var(--ok); border-color: currentColor; }
+  .tag.err { color: var(--err); border-color: currentColor; }
+
+  .bar { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); transition: width .15s linear; }
+  .bar.indet > i { width: 35%; animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { from { margin-left: -35%; } to { margin-left: 100%; } }
+
+  .empty { color: var(--muted); padding: 8px; font-size: 13px; }
+  .err-text { color: var(--err); font-family: var(--mono); font-size: 11px; word-break: break-word; }
+  .notice { color: var(--err); font-size: 12px; margin-top: 8px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .paths { font-family: var(--mono); font-size: 11px; color: var(--muted); word-break: break-all; }
+
+  /* drop target */
+  .drop {
+    border: 1.5px dashed var(--border); border-radius: 8px; padding: 18px;
+    text-align: center; color: var(--muted); font-size: 13px; transition: .12s;
+  }
+  .drop.over { border-color: var(--accent); background: var(--hover); color: var(--text); }
+
+  /* merged transcript + editor */
+  /* The controls sit below the transcript: the document is what you read, and
+     the editor is where your hands are, so reading flows downward into acting. */
+  .editor {
+    background: var(--panel); border-top: 1px solid var(--border);
+    padding: 14px 0 2px; margin-top: 10px;
+  }
+  .editrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .editrow input[type=text] { flex: 1 1 240px; font-size: 15px; padding: 8px 10px; }
+  .doc { max-height: 58vh; overflow: auto; padding-right: 6px; }
+  .selword {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+    background: var(--accent); color: var(--accent-text); border-radius: 3px;
+  }
+
+  .mrow { display: flex; gap: 10px; align-items: flex-start; padding: 9px 2px; border-bottom: 1px solid var(--border); }
+  .mrow:last-child { border-bottom: none; }
+  .mmain { flex: 1; min-width: 0; }
+  .mname { font-size: 13px; }
+  .mpub { font-size: 11px; color: var(--muted); }
+  .mrec {
+    display: inline-block; margin-left: 8px; padding: 0 7px; border-radius: 999px;
+    font-size: 10.5px; letter-spacing: .03em; text-transform: uppercase;
+    background: var(--accent); color: var(--accent-text);
+  }
+  .mrow.rec { background: var(--hover); border-radius: 8px; padding-left: 8px; padding-right: 8px; }
+  .mnote { font-size: 11.5px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+  .mstat { flex: 0 0 auto; text-align: right; font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .thresh { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+  .thresh input[type=range] { flex: 1 1 220px; accent-color: var(--accent); }
+  .vts { display: flex; gap: 5px; align-items: center; flex: 0 0 auto; }
+  .lbtn {
+    font-family: var(--mono); font-size: 11px; line-height: 1.6;
+    padding: 1px 7px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--bg); color: var(--muted); cursor: pointer;
+  }
+  .lbtn:hover { border-color: var(--accent); color: var(--text); background: var(--hover); }
+  .lbtn.play { padding: 1px 6px; }
+  .vseg.editing { background: var(--hover); border-radius: 6px; }
+  .lineedit { display: flex; gap: 8px; width: 100%; align-items: flex-start; }
+  .lineedit textarea {
+    flex: 1; min-height: 56px; padding: 8px 10px; border: 1px solid var(--accent);
+    border-radius: 6px; background: var(--bg); color: var(--text);
+    font: inherit; font-size: 15px; line-height: 1.6; resize: vertical;
+  }
+  .vseg.rewritten .lbtn.time { color: var(--ok); border-color: var(--ok); }
+
+  /* read-through view */
+  .vseg { display: flex; gap: 12px; padding: 5px 0; align-items: baseline; }
+  .vts { flex: 0 0 auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .vtext { flex: 1; line-height: 1.75; }
+  .vw { cursor: default; }
+  .vw.flag {
+    cursor: pointer; border-bottom: 2px solid var(--err);
+    background: var(--track); border-radius: 3px; padding: 0 2px;
+  }
+  .vw.flag:hover { outline: 1px solid var(--accent); }
+  .vw.done { border-bottom-color: var(--ok); background: none; }
+  .vw.edited { border-bottom-color: var(--ok); background: none; font-weight: 600; }
+
+  /* picker dialog */
+  dialog {
+    border: 1px solid var(--border); border-radius: 10px; background: var(--panel);
+    color: var(--text); padding: 0; width: min(720px, 92vw); max-height: 82vh;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .dlg-head, .dlg-foot { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .dlg-foot { border-bottom: none; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+  .dlg-body { max-height: 52vh; overflow: auto; }
+  .crumbs { display: flex; gap: 8px; align-items: center; }
+  .crumbs input { flex: 1; }
+  .shortcuts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .entry {
+    display: flex; gap: 10px; align-items: center; padding: 7px 16px; cursor: pointer;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .entry:hover { background: var(--hover); }
+  .entry .ico { width: 16px; text-align: center; color: var(--muted); }
+  .entry .en { flex: 1; font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .entry.sel { background: var(--hover); outline: 1px solid var(--accent); outline-offset: -1px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+    <h1>Speech-to-Text Editor</h1>
+    <select id="ui-lang" style="flex:0 0 auto" aria-label="Language">
+      <option value="tr">Türkçe</option>
+      <option value="en">English</option>
+    </select>
+  </div>
+  <p class="sub" data-i18n="sub">
+    Turn recordings into text, check the uncertain words by ear, and export
+    subtitles &mdash; all on this computer, nothing uploaded.
+  </p>
+
+  <nav>
+    <button id="tab-library" aria-selected="true">Library</button>
+    <button id="tab-transcribe" aria-selected="false">Transcribe <span class="count" id="wavcount">0</span></button>
+    <button id="tab-jobs" aria-selected="false">Jobs <span class="count" id="jobcount">0</span></button>
+    <button id="tab-review" aria-selected="false">Review <span class="count" id="revcount">0</span></button>
+    <button id="tab-dataset" aria-selected="false">Dataset</button>
+    <button id="tab-folders" aria-selected="false">Folders</button>
+  </nav>
+
+  <!-- ===================== LIBRARY ===================== -->
+  <section id="page-library">
+    <div class="panel">
+      <div class="head">
+        <h2>Output format</h2>
+        <span class="fmt" id="fmt">&mdash;</span>
+      </div>
+      <div class="opts">
+        <label><input type="checkbox" id="loudnorm" checked> Loudness normalise (EBU R128)</label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="head">
+        <h2>Audio &nbsp;<span class="path" id="audio-path"></span></h2>
+        <div class="btns">
+          <button class="b small" id="rescan-audio">Rescan</button>
+          <button class="b small primary" id="all-audio">Transcribe all pending</button>
+        </div>
+      </div>
+      <table><thead><tr><th>File</th><th class="num">Size</th><th>WAV</th><th></th></tr></thead>
+        <tbody id="list-audio"></tbody></table>
+      <div id="empty-audio" class="empty" hidden></div>
+    </div>
+
+    <div class="panel">
+      <div class="head">
+        <h2>Video &nbsp;<span class="path" id="video-path"></span></h2>
+        <div class="btns">
+          <button class="b small" id="rescan-video">Rescan</button>
+          <button class="b small primary" id="all-video">Transcribe all pending</button>
+        </div>
+      </div>
+      <table><thead><tr><th>File</th><th class="num">Size</th><th>WAV</th><th></th></tr></thead>
+        <tbody id="list-video"></tbody></table>
+      <div id="empty-video" class="empty" hidden></div>
+    </div>
+
+    <div class="panel">
+      <div class="head">
+        <h2>Files from elsewhere</h2>
+        <div class="btns">
+          <button class="b small" id="browse">Browse&hellip;</button>
+          <button class="b small" id="forget-all">Remove all</button>
+          <button class="b small primary" id="all-added">Transcribe all pending</button>
+        </div>
+      </div>
+
+      <div class="drop" id="drop" data-i18n="drop">
+        Drag a file or folder here from your file manager,
+        or <b>paste a path</b> below, or use <b>Browse&hellip;</b>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label for="pathbox">Path to a file or folder</label>
+          <input type="text" id="pathbox" spellcheck="false" placeholder="/home/you/Videos/lecture.mp4">
+        </div>
+        <div class="fit"><button class="b" id="addpath">Add</button></div>
+      </div>
+      <div id="add-err" class="notice" hidden></div>
+      <p class="hint" data-i18n="inplace">
+        Files are read where they are &mdash; nothing is copied or uploaded.
+      </p>
+
+      <table style="margin-top:4px"><thead><tr><th>File</th><th class="num">Size</th><th>WAV</th><th></th></tr></thead>
+        <tbody id="list-added"></tbody></table>
+      <div id="empty-added" class="empty" hidden>Nothing added.</div>
+    </div>
+  </section>
+
+  <!-- ===================== TRANSCRIBE ===================== -->
+  <section id="page-transcribe" hidden>
+    <div class="panel">
+      <div class="head">
+        <h2>Models &nbsp;<span class="path" id="model-path"></span></h2>
+        <button class="b small" id="rescan-models">Rescan</button>
+      </div>
+      <div id="model-list"></div>
+      <div id="model-empty" class="empty" hidden></div>
+      <p class="hint" data-i18n="multimodel">
+        Tick more than one to run them all over the same audio &mdash; each writes
+        into its own subfolder, so nothing overwrites.
+      </p>
+
+      <h2 style="margin-top:18px">Not installed</h2>
+      <div id="model-avail"></div>
+      <p class="hint" id="avail-hint" data-i18n="availhint" hidden>
+        Word error rates come from a published Turkish benchmark, so the numbers
+        can be compared with each other. Lower is better; a lower speed figure
+        means faster.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>Settings</h2>
+      <div class="opts" style="margin-bottom:10px">
+        <label><input type="checkbox" id="use-gpu"> Use GPU acceleration</label>
+        <span id="gpu-status" class="tag">checking&hellip;</span>
+        <button class="b small" id="recheck-gpu">Re-check</button>
+      </div>
+      <div class="row" id="gpu-picker" style="margin-bottom:10px" hidden>
+        <div style="flex:0 0 150px">
+          <label for="gpu-driver">Driver</label>
+          <select id="gpu-driver" style="width:100%"></select>
+        </div>
+        <div style="flex:1 1 260px">
+          <label for="gpu-device">Device</label>
+          <select id="gpu-device" style="width:100%"></select>
+        </div>
+      </div>
+      <div id="gpu-why" class="hint" style="margin:0 0 12px" hidden></div>
+      <div class="opts">
+        <label><input type="checkbox" id="use-vad" checked> Voice activity detection</label>
+        <select id="vad-model"></select>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div style="flex:0 0 110px">
+          <label for="lang">Language</label>
+          <input type="text" id="lang" value="tr" spellcheck="false">
+        </div>
+        <div style="flex:0 0 110px">
+          <label for="threads">Threads</label>
+          <input type="text" id="threads" spellcheck="false">
+        </div>
+        <div style="flex:0 0 110px">
+          <label for="beam">Beam size</label>
+          <input type="text" id="beam" value="5" spellcheck="false">
+        </div>
+      </div>
+      <p class="hint" data-i18n="runswith">
+        Runs with <span class="path">-mc 0</span> (no cross-segment context) and
+        <span class="path">-ojf</span>, which carries the per-token probabilities
+        the error-detection stage needs.
+      </p>
+    </div>
+
+    <div class="panel">
+      <div class="head">
+        <h2>Words to expect</h2>
+        <span class="path" id="gl-status"></span>
+      </div>
+      <p class="hint" style="margin-top:0" data-i18n="glhint">
+        Names, places and terms that come up in these recordings. Telling the
+        model what to expect stops it mishearing them in the first place, which
+        is easier than correcting the same word in every transcript.
+        One per line, or separated by commas.
+      </p>
+      <textarea id="gl-text" spellcheck="false" rows="6"
+        style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;
+               background:var(--bg);color:var(--text);font-family:var(--mono);font-size:12px"
+        placeholder="konsensüs&#10;blokzincir&#10;Bizans generalleri problemi"></textarea>
+      <div class="opts" style="margin-top:10px">
+        <button class="b primary" id="gl-save">Save</button>
+        <span class="path" id="gl-note"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="head">
+        <h2>Converted WAVs &nbsp;<span class="path" id="wav-path"></span></h2>
+        <div class="btns">
+          <button class="b small" id="rescan-wavs">Rescan</button>
+          <button class="b small primary" id="all-wavs">Transcribe all</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th style="width:28px"></th><th>File</th><th>Format</th><th class="num">Length</th><th></th></tr></thead>
+        <tbody id="list-wavs"></tbody>
+      </table>
+      <div id="empty-wavs" class="empty" data-i18n="nowavs" hidden>
+        Nothing converted yet &mdash; convert something on the Library page first.
+      </div>
+      <div id="tr-err" class="notice" hidden></div>
+    </div>
+  </section>
+
+  <!-- ===================== JOBS ===================== -->
+  <section id="page-jobs" hidden>
+    <div class="panel">
+      <div class="head">
+        <h2>Conversions</h2>
+        <button class="b small" id="clear">Clear finished</button>
+      </div>
+      <table><thead><tr><th>File</th><th style="width:34%">Progress</th><th class="num">Result</th><th></th></tr></thead>
+        <tbody id="jobs"></tbody></table>
+      <div id="jobs-empty" class="empty" hidden>Nothing queued yet.</div>
+    </div>
+  </section>
+
+  <!-- ===================== REVIEW ===================== -->
+  <section id="page-review" hidden>
+    <div class="panel">
+      <div class="head">
+        <h2>Transcripts</h2>
+        <button class="b small" id="rescan-review">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Transcript</th><th>Model</th><th class="num">Run</th><th class="num">To check</th><th></th></tr></thead>
+        <tbody id="review-list"></tbody>
+      </table>
+      <div id="review-empty" class="empty" hidden>Nothing transcribed yet.</div>
+    </div>
+
+    <div class="panel" id="rv-panel" hidden>
+      <div class="head">
+        <h2 id="rv-title"></h2>
+        <div class="btns">
+          <button class="b small" id="rv-dl-txt">Download .txt</button>
+          <button class="b small" id="rv-dl-srt">Download .srt</button>
+          <button class="b small" id="rv-close">Close</button>
+        </div>
+      </div>
+
+      <div class="bar" style="margin-bottom:10px"><i id="rv-bar" style="width:0%"></i></div>
+
+      <div class="thresh" style="margin-bottom:10px">
+        <span class="path" id="th-label">Check words less certain than</span>
+        <span class="path">fewer</span>
+        <input type="range" id="th-range" min="0.05" max="0.95" step="0.05" value="0.5">
+        <span class="path">more</span>
+        <b id="th-value" style="font-family:var(--mono);font-size:12px">0.50</b>
+        <span class="path" id="th-count"></span>
+      </div>
+
+      <div class="doc" id="rv-doc"></div>
+      <p class="hint" data-i18n="revhint">
+        Underlined words were flagged for checking &mdash; click one to hear it and
+        correct it. Each line has a <b>&#9654;</b> to hear the whole sentence, and
+        clicking its <b>time</b> lets you rewrite that sentence &mdash; or empty it
+        to drop the line entirely.
+      </p>
+      <div class="editor" id="rv-editor">
+        <div class="editrow">
+          <button class="b" id="rv-play">&#9654; Play</button>
+          <button class="b" id="rv-more">+5s</button>
+          <audio id="rv-audio" preload="auto"></audio>
+          <input type="text" id="rv-input" spellcheck="false" placeholder="select a word below" data-ph="selword">
+          <button class="b primary" id="rv-save">Save</button>
+          <button class="b" id="rv-ok">Correct</button>
+          <button class="b" id="rv-not">Not an error</button>
+          <button class="b" id="rv-skip">Skip</button>
+        </div>
+        <div class="editrow" style="margin-top:8px">
+          <span class="path" id="rv-progress"></span>
+          <span class="path" id="rv-flags"></span>
+          <span class="path" style="margin-left:auto" data-i18n="keys">
+            space play &nbsp;·&nbsp; enter save &nbsp;·&nbsp; a correct &nbsp;·&nbsp;
+            n not an error &nbsp;·&nbsp; tab next &nbsp;·&nbsp; k back
+          </span>
+        </div>
+        <div id="rv-err" class="notice" hidden></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== DATASET ===================== -->
+  <section id="page-dataset" hidden>
+    <div class="panel">
+      <div class="head">
+        <h2>Improve the model</h2>
+        <button class="b small" id="rescan-dataset">Refresh</button>
+      </div>
+      <p class="hint" style="margin-top:0" data-i18n="dshint">
+        Corrections you make while reviewing are saved here, each one pairing a
+        short audio clip with the text you confirmed. Sent back, they are used to
+        make the speech model better at this kind of material.
+      </p>
+
+      <table style="margin-top:12px">
+        <tbody id="dataset-rows"></tbody>
+      </table>
+
+      <div class="row" style="margin-top:14px">
+        <div>
+          <label for="ds-note">Note to include (optional)</label>
+          <input type="text" id="ds-note" spellcheck="false"
+                 placeholder="anything worth knowing about these recordings" data-ph="dsnote">
+        </div>
+        <div class="fit">
+          <button class="b primary" id="ds-download">Download .zip</button>
+        </div>
+      </div>
+      <div id="ds-err" class="notice" hidden></div>
+
+      <p class="hint" data-i18n="dssend">
+        The file is saved to your computer &mdash; nothing is sent anywhere on its
+        own. Send it on however you like, or keep it.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>What is in the file</h2>
+      <table>
+        <tbody>
+          <tr><td class="name">corrections/dataset.jsonl</td>
+              <td data-i18n="ds1">one line per reviewed span: the original text, your correction, and why it was flagged</td></tr>
+          <tr><td class="name">corrections/clips/</td>
+              <td data-i18n="ds2">the few seconds of audio each correction refers to, 16 kHz mono</td></tr>
+          <tr><td class="name">transcripts/</td>
+              <td data-i18n="ds3">the engine's own output, including how confident it was on every word</td></tr>
+          <tr><td class="name">README.txt / manifest.json</td>
+              <td data-i18n="ds4">a plain description of the above, and which recordings it came from</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== FOLDERS ===================== -->
+  <section id="page-folders" hidden>
+    <div class="panel">
+      <h2>Default folders</h2>
+      <div class="row">
+        <div><label for="in-audio">Audio library</label><input type="text" id="in-audio" spellcheck="false"></div>
+        <div><label for="in-video">Video library</label><input type="text" id="in-video" spellcheck="false"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div><label for="in-output">WAV output</label><input type="text" id="in-output" spellcheck="false"></div>
+        <div class="fit"><button class="b primary" id="apply">Apply</button></div>
+      </div>
+      <div id="cfg-err" class="notice" hidden></div>
+      <p class="hint" data-i18n="outsplit">
+        WAVs are written to <span class="path">&lt;output&gt;/audio/</span> and
+        <span class="path">&lt;output&gt;/video/</span> so identically named
+        sources cannot overwrite each other.
+      </p>
+    </div>
+    <div class="panel">
+      <h2>Tools</h2>
+      <div class="paths" id="tools"></div>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== PICKER ===================== -->
+<dialog id="picker">
+  <div class="dlg-head">
+    <div class="crumbs">
+      <button class="b small" id="pk-up">Up</button>
+      <input type="text" id="pk-path" spellcheck="false">
+      <button class="b small" id="pk-go">Go</button>
+    </div>
+    <div class="shortcuts" id="pk-shortcuts"></div>
+  </div>
+  <div class="dlg-body" id="pk-body"></div>
+  <div class="dlg-foot">
+    <label style="display:flex;gap:7px;align-items:center;margin:0;font-size:12px">
+      <input type="checkbox" id="pk-hidden"> Show hidden
+    </label>
+    <div style="display:flex;gap:8px">
+      <button class="b" id="pk-cancel">Cancel</button>
+      <button class="b" id="pk-folder">Add this folder</button>
+      <button class="b primary" id="pk-add" disabled>Add file</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// --- language --------------------------------------------------------------
+//
+// Static markup is translated by matching the English text, so an element does
+// not need marking up individually; the original is cached on the node so that
+// switching back is exact. Strings built in JavaScript go through t().
+
+const TR = {
+  // navigation and headings
+  "Speech-to-Text Editor": "Konuşmadan Metne Düzenleyici",
+  "Library": "Kayıtlar", "Transcribe": "Metne Çevir", "Review": "Denetle",
+  "Jobs": "İşlemler", "Dataset": "Veri Kümesi", "Folders": "Klasörler",
+  "Audio": "Ses", "Video": "Video", "Files from elsewhere": "Başka yerdeki dosyalar",
+  "Transcripts": "Metinler", "Transcript": "Metin", "Run": "Deneme", "Models": "Modeller",
+  "Settings": "Ayarlar", "Conversions": "Dönüştürmeler",
+  "Converted WAVs": "Dönüştürülmüş sesler", "Output format": "Çıktı biçimi",
+  "Default folders": "Varsayılan klasörler", "Tools": "Araçlar",
+  "Improve the model": "Modeli geliştir", "What is in the file": "Dosyanın içeriği",
+  // buttons
+  "Refresh": "Yenile", "Rescan": "Yeniden tara", "Close": "Kapat", "Open": "Aç",
+  "Browse\u2026": "Gözat\u2026", "Add": "Ekle", "Apply": "Uygula",
+  "Cancel": "İptal", "Remove all": "Tümünü kaldır", "Clear finished": "Bitenleri temizle",
+  "Convert to WAV": "Sese dönüştür", 
+  "Transcribe all": "Tümünü çevir", "Re-check": "Yeniden denetle",
+  "Download .txt": "\u2193 .txt", "Download .srt": "\u2193 .srt",
+  "Download .zip": "\u2193 .zip", "Save": "Kaydet", "Correct": "Doğru",
+  "Not an error": "Hata değil", "Skip": "Atla", "Play": "Oynat",
+  "Add this folder": "Bu klasörü ekle", "Add file": "Dosyayı ekle", "Up": "Yukarı",
+  "Go": "Git", "Show hidden": "Gizlileri göster",
+  // labels
+  "Input": "Girdi", "Output": "Çıktı", "File": "Dosya", "Size": "Boyut",
+  "Length": "Süre", "Model": "Model", "Progress": "İlerleme", "Result": "Sonuç",
+  "Format": "Biçim", "To check": "Denetlenecek", "Language": "Dil",
+  "Threads": "İş parçacığı", "Beam size": "Işın genişliği",
+  "Correction": "Düzeltme", "Driver": "Sürücü", "Device": "Aygıt",
+  "Audio library": "Ses klasörü", "Video library": "Video klasörü",
+  "WAV output": "Ses çıktısı", "Path to a file or folder": "Dosya veya klasör yolu",
+  "Note to include (optional)": "Eklenecek not (isteğe bağlı)",
+  "Use GPU acceleration": "Ekran kartını kullan",
+  "Voice activity detection": "Konuşma algılama",
+  "Loudness normalise (EBU R128)": "Ses düzeyini eşitle",
+  // messages
+  "Nothing transcribed yet.": "Henüz metne çevrilmiş kayıt yok.",
+  "Nothing queued yet.": "Bekleyen işlem yok.",
+  "Nothing added.": "Eklenmiş dosya yok.",
+  "unavailable": "kullanılamıyor", "checking\u2026": "denetleniyor\u2026",
+  "select a word below": "aşağıdan bir kelime seçin",
+  "Words to expect": "Beklenen kelimeler",
+  "Not installed": "Kurulu değil",
+  "Transcribe all pending": "Bekleyenleri çevir",
+  "Check words less certain than": "Şundan daha az emin olunan kelimeleri denetle",
+  "fewer": "az", "more": "çok",
+};
+
+// Whole passages, kept as markup so Turkish can place its own emphasis rather
+// than inheriting English word order.
+const TR_HTML = {
+  sub: "Kayıtları metne çevirin, şüpheli kelimeleri kulağınızla denetleyin ve altyazı " +
+       "olarak dışa aktarın &mdash; hepsi bu bilgisayarda, hiçbir şey yüklenmez.",
+  drop: "Dosya yöneticinizden buraya bir dosya veya klasör sürükleyin, ya da aşağıya " +
+        "<b>bir yol yapıştırın</b>, ya da <b>Gözat&hellip;</b> düğmesini kullanın.",
+  inplace: "Dosyalar bulundukları yerden okunur &mdash; hiçbir şey kopyalanmaz veya yüklenmez.",
+  multimodel: "Aynı ses üzerinde birden fazla model çalıştırmak için birden çoğunu " +
+              "işaretleyin &mdash; her biri kendi klasörüne yazar, hiçbiri diğerinin " +
+              "üzerine yazmaz.",
+  availhint: "Kelime hata oranları yayımlanmış bir Türkçe kıyaslamadan geliyor, bu yüzden " +
+             "birbiriyle karşılaştırılabilir. Düşük olan daha iyidir; düşük hız değeri " +
+             "daha hızlı demektir.",
+  runswith: "<span class=\"path\">-mc 0</span> (cümleler arası bağlam yok) ve " +
+            "<span class=\"path\">-ojf</span> ile çalışır; ikincisi hata bulma aşamasının " +
+            "ihtiyaç duyduğu kelime başına güven değerlerini taşır.",
+  glhint: "Bu kayıtlarda geçen isimler, yerler ve terimler. Modele ne bekleyeceğini " +
+          "söylemek, o kelimeleri en baştan yanlış duymasını engeller; bu da aynı " +
+          "kelimeyi her metinde tek tek düzeltmekten kolaydır. Her satıra bir tane, " +
+          "ya da virgülle ayırın.",
+  nowavs: "Henüz dönüştürülmüş ses yok &mdash; önce Kayıtlar sayfasından bir dosya çevirin.",
+  revhint: "Altı çizili kelimeler denetlenmek üzere işaretlendi &mdash; dinlemek ve " +
+           "düzeltmek için birine tıklayın. Her satırda cümlenin tamamını dinlemek için " +
+           "bir <b>&#9654;</b> var; satırın <b>saatine</b> tıklayınca o cümleyi yeniden " +
+           "yazabilir, ya da boşaltıp satırı tamamen kaldırabilirsiniz.",
+  keys: "boşluk dinle &nbsp;·&nbsp; enter kaydet &nbsp;·&nbsp; a doğru &nbsp;·&nbsp; " +
+        "n hata değil &nbsp;·&nbsp; tab sonraki &nbsp;·&nbsp; k geri",
+  dshint: "Denetlerken yaptığınız düzeltmeler burada saklanır; her biri kısa bir ses " +
+          "parçasıyla onayladığınız metni eşleştirir. Geri gönderildiğinde, konuşma " +
+          "modelini bu tür kayıtlarda daha iyi hale getirmek için kullanılır.",
+  dssend: "Dosya bilgisayarınıza kaydedilir &mdash; kendiliğinden hiçbir yere gönderilmez. " +
+          "Dilediğiniz gibi iletebilir ya da kendinizde tutabilirsiniz.",
+  outsplit: "Sesler <span class=\"path\">&lt;çıktı&gt;/audio/</span> ve " +
+            "<span class=\"path\">&lt;çıktı&gt;/video/</span> altına yazılır; böylece aynı " +
+            "adlı kaynaklar birbirinin üzerine yazamaz.",
+  ds1: "denetlenen her parça için bir satır: özgün metin, düzeltmeniz ve neden işaretlendiği",
+  ds2: "her düzeltmenin işaret ettiği birkaç saniyelik ses, 16 kHz tek kanal",
+  ds3: "motorun kendi çıktısı, her kelimeye ne kadar güvendiği dahil",
+  ds4: "yukarıdakilerin sade bir açıklaması ve hangi kayıtlardan geldiği",
+  dsnote: "bu kayıtlar hakkında bilinmesi gereken bir şey",
+  selword: "aşağıdan bir kelime seçin",
+};
+
+const DYN = {
+  en: {
+    "no-audio": "source audio not found \u2014 you can read, but not listen",
+    "unaligned": "word timings are not aligned \u2014 transcribe again for correct audio",
+    "unaligned-short": "timings unaligned",
+    "open": "Open", "play": "Play", "press-space": "Play \u2014 press space",
+    "audio-unavailable": "audio unavailable", "corrected": "corrected",
+    "confidence": "confidence",
+    "d-accepted": "correct", "d-edited": "corrected",
+    "d-not_an_error": "not an error", "d-skipped": "skipped",
+    "f-low_confidence": "unsure", "f-segment_initial": "sentence start",
+    "checked-of": (a, b) => a + " of " + b + " checked",
+    "edit-line": "rewrite this whole line", "play-line": "play this line",
+    "flagged-n": (n) => n + " words flagged",
+    "transcribe-it": "Transcribe",
+    "transcribe-it-help": "prepare the audio and transcribe it, in one step",
+    "queued": "queued", "working": "working",
+    "left": (v) => "about " + v + " left",
+    "terms-n": (n) => n + " terms",
+    "install-with": "install with", "speed": "speed", "recommended": "recommended",
+    "delete": "Delete",
+    "drop-nopath": (types) =>
+      "Your desktop did not include the file's location in the drop, only its contents, " +
+      "so it cannot be read in place. Use Browse… or paste the path. (offered: " + types + ")",
+    "drop-nothing": (types) => "Nothing usable in that drop. (offered: " + types + ")",
+    "del-confirm": (name, run) => "Delete run #" + run + " of \u201c" + name + "\u201d?\n\n" +
+      "The transcript and its subtitles go. The audio and the collected training data stay.",
+    "del-reviewed": (n) => "You have already checked " + n + " words in this run.",
+    "gl-trimmed": (n) => "too long — only the first " + n + " characters are used",
+    "save": "Save", "cancel": "Cancel", "revert": "Undo rewrite",
+  },
+  tr: {
+    "no-audio": "kaynak ses bulunamadı \u2014 okuyabilirsiniz ama dinleyemezsiniz",
+    "unaligned": "kelime zamanları hizalı değil \u2014 sesin doğru olması için yeniden çevirin",
+    "unaligned-short": "zamanlar hizasız",
+    "open": "Aç", "play": "Oynat", "press-space": "Oynat \u2014 boşluğa basın",
+    "audio-unavailable": "ses yok", "corrected": "düzeltildi",
+    "confidence": "güven",
+    "d-accepted": "doğru", "d-edited": "düzeltildi",
+    "d-not_an_error": "hata değil", "d-skipped": "atlandı",
+    "f-low_confidence": "şüpheli", "f-segment_initial": "cümle başı",
+    "checked-of": (a, b) => a + " / " + b + " denetlendi",
+    "edit-line": "bu satırın tamamını yeniden yaz", "play-line": "bu satırı dinle",
+    "flagged-n": (n) => n + " kelime işaretlendi",
+    "transcribe-it": "Metne çevir",
+    "transcribe-it-help": "sesi hazırlar ve tek adımda metne çevirir",
+    "queued": "sırada", "working": "çalışıyor",
+    "left": (v) => "yaklaşık " + v + " kaldı",
+    "terms-n": (n) => n + " terim",
+    "install-with": "kurmak için", "speed": "hız", "recommended": "önerilen",
+    "delete": "Sil",
+    "drop-nopath": (types) =>
+      "Masaüstünüz sürüklenen dosyanın konumunu vermedi, yalnızca içeriğini verdi; " +
+      "bu yüzden yerinde okunamıyor. Gözat… kullanın ya da yolu yapıştırın. (gelen: " + types + ")",
+    "drop-nothing": (types) => "Bu sürüklemede kullanılabilir bir şey yok. (gelen: " + types + ")",
+    "del-confirm": (name, run) => "\u201c" + name + "\u201d kaydının #" + run + " denemesi silinsin mi?\n\n" +
+      "Metin ve altyazılar silinir. Ses dosyası ve toplanan veriler kalır.",
+    "del-reviewed": (n) => "Bu denemede zaten " + n + " kelimeyi denetlediniz.",
+    "gl-trimmed": (n) => "çok uzun — yalnızca ilk " + n + " karakter kullanılır",
+    "save": "Kaydet", "cancel": "İptal", "revert": "Geri al",
+  },
+};
+
+let LANG = (() => {
+  try {
+    const saved = localStorage.getItem("lang");
+    if (saved === "tr" || saved === "en") return saved;
+  } catch (e) { /* blocked storage */ }
+  return (navigator.language || "").toLowerCase().startsWith("tr") ? "tr" : "en";
+})();
+
+function t(key, ...args) {
+  const v = (DYN[LANG] || DYN.en)[key] ?? DYN.en[key] ?? key;
+  return typeof v === "function" ? v(...args) : v;
+}
+
+// Walk the static markup, swapping text against the dictionary. The English
+// original is cached the first time so switching back is lossless, and lookups
+// are made on whitespace-normalised text so a phrase wrapped across source
+// lines still matches its dictionary entry.
+function applyLang() {
+  const norm = (v) => v.trim().replace(/\s+/g, " ");
+
+  // Whole passages first. These carry inline markup, so they are replaced as
+  // markup rather than pieced together from fragments.
+  for (const el of document.querySelectorAll("[data-i18n]")) {
+    if (el.__enHtml === undefined) el.__enHtml = el.innerHTML;
+    const tr = TR_HTML[el.dataset.i18n];
+    el.innerHTML = (LANG === "tr" && tr) ? tr : el.__enHtml;
+  }
+  for (const el of document.querySelectorAll("[data-ph]")) {
+    if (el.__enPh === undefined) el.__enPh = el.placeholder;
+    const tr = TR_HTML[el.dataset.ph];
+    el.placeholder = (LANG === "tr" && tr) ? tr : el.__enPh;
+  }
+
+  for (const el of document.querySelectorAll("body *")) {
+    if (el.closest("[data-i18n]")) continue; // already handled as a passage
+    for (const n of el.childNodes) {
+      if (n.nodeType !== 3) continue;
+      const cur = norm(n.nodeValue);
+      if (!cur) continue;
+      // Only touch text the dictionary knows, in either direction. Anything
+      // else is either a literal or written by JavaScript, and rewriting it
+      // from a stale cache would clobber live content such as progress text.
+      if (n.__en === undefined) {
+        if (!TR[cur]) continue;
+        n.__en = cur;
+      }
+      n.nodeValue = LANG === "tr" ? TR[n.__en] : n.__en;
+    }
+    if (el.placeholder && !el.dataset.ph) {
+      const cur = norm(el.placeholder);
+      if (el.__enPh === undefined) {
+        if (!TR[cur]) continue;
+        el.__enPh = cur;
+      }
+      el.placeholder = LANG === "tr" ? TR[el.__enPh] : el.__enPh;
+    }
+  }
+  document.documentElement.lang = LANG;
+  $("ui-lang").value = LANG;
+}
+
+function setLang(v) {
+  LANG = v;
+  try { localStorage.setItem("lang", v); } catch (e) { /* not remembered */ }
+  applyLang();
+  // Re-render the parts built in JavaScript so their strings follow.
+  loadReviewList();
+  loadFiles();
+  loadWavs();
+}
+
+
+function bytes(n) {
+  if (!n) return "—";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(i === 0 ? 0 : 1) + " " + u[i];
+}
+// eta rounds hard: nobody wants "11 minutes 43 seconds remaining".
+function eta(n) {
+  if (n < 90) return Math.max(5, Math.round(n / 5) * 5) + " s";
+  const m = Math.round(n / 60);
+  if (m < 60) return m + " min";
+  return Math.floor(m / 60) + " h " + (m % 60) + " min";
+}
+
+function secs(n) {
+  if (!n) return "";
+  return n < 60 ? n.toFixed(1) + "s" : Math.floor(n / 60) + "m " + Math.round(n % 60) + "s";
+}
+async function api(path, body) {
+  const opts = body === undefined ? {}
+    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+let status = {};
+
+// --- tabs -----------------------------------------------------------------
+
+const pages = ["library", "transcribe", "jobs", "review", "dataset", "folders"];
+function show(page) {
+  for (const p of pages) {
+    $("page-" + p).hidden = p !== page;
+    $("tab-" + p).setAttribute("aria-selected", String(p === page));
+  }
+}
+for (const p of pages) {
+  $("tab-" + p).onclick = () => {
+    show(p);
+    if (p === "transcribe") { loadWavs(); loadModels(); loadGPU(false); loadGlossary(); }
+    if (p === "review") loadReviewList();
+    if (p === "dataset") loadDataset();
+  };
+}
+
+// --- status ---------------------------------------------------------------
+
+async function loadStatus() {
+  status = await api("/api/status");
+  $("in-audio").value = status.audioDir;
+  $("in-video").value = status.videoDir;
+  $("in-output").value = status.outputDir;
+  $("audio-path").textContent = status.audioDir;
+  $("video-path").textContent = status.videoDir;
+  $("wav-path").textContent = status.outputDir;
+  if (!$("threads").value) $("threads").value = status.cores || 4;
+  $("fmt").textContent = (status.sampleRate / 1000) + " kHz · "
+    + (status.channels === 1 ? "mono" : status.channels + " ch") + " · " + status.codec;
+  $("tools").textContent = "ffmpeg: " + status.ffmpeg + "\n"
+    + "ffprobe: " + (status.ffprobe || "not found — progress bars will be indeterminate");
+  $("pathbox").placeholder = (status.home || "") + status.sep + "Videos" + status.sep + "lecture.mp4";
+}
+
+// --- file lists -----------------------------------------------------------
+
+let lists = { audio: [], video: [], added: [] };
+
+function renderList(kind, files, err) {
+  const tbody = $("list-" + kind);
+  const empty = $("empty-" + kind);
+  tbody.innerHTML = "";
+
+  if (err) {
+    empty.hidden = false;
+    empty.innerHTML = "";
+    const e = document.createElement("span");
+    e.className = "err-text";
+    e.textContent = err;
+    empty.appendChild(e);
+    return;
+  }
+  empty.hidden = files.length > 0;
+  if (kind !== "added") empty.textContent = "No " + kind + " files in this folder.";
+
+  for (const f of files) {
+    const tr = document.createElement("tr");
+
+    const name = document.createElement("td");
+    const n = document.createElement("div");
+    n.className = "name";
+    n.textContent = f.name;
+    name.appendChild(n);
+    if (kind === "added") {
+      const p = document.createElement("div");
+      p.className = "path";
+      p.textContent = f.source;
+      name.appendChild(p);
+    }
+
+    const size = document.createElement("td");
+    size.className = "num";
+    size.textContent = f.missing ? "" : bytes(f.size);
+
+    const state = document.createElement("td");
+    const tag = document.createElement("span");
+    if (f.missing) { tag.className = "tag err"; tag.textContent = "missing"; }
+    else if (f.converted) { tag.className = "tag ok"; tag.textContent = bytes(f.outSize); }
+    else { tag.className = "tag"; tag.textContent = "not converted"; }
+    state.appendChild(tag);
+
+    const act = document.createElement("td");
+    act.className = "act";
+    if (!f.missing) {
+      const btn = document.createElement("button");
+      btn.className = "b small primary";
+      btn.textContent = t("transcribe-it");
+      btn.title = t("transcribe-it-help");
+      // One action: convert if needed, then transcribe. The WAV exists only
+      // because whisper needs it, so it is not something to ask the user for.
+      btn.onclick = () => pipeline([f.source], btn);
+      act.appendChild(btn);
+    }
+    if (kind === "added") {
+      const rm = document.createElement("button");
+      rm.className = "b small";
+      rm.style.marginLeft = "6px";
+      rm.textContent = "Remove";
+      rm.onclick = () => api("/api/sources/remove", { paths: [f.source] }).then(loadFiles).catch((e) => alert(e.message));
+      act.appendChild(rm);
+    }
+
+    tr.append(name, size, state, act);
+    tbody.appendChild(tr);
+  }
+
+  $("all-" + kind).disabled = files.filter((f) => !f.missing).length === 0;
+}
+
+async function loadFiles() {
+  let data;
+  try {
+    data = await api("/api/files");
+  } catch (e) {
+    return;
+  }
+  lists = { audio: data.audio || [], video: data.video || [], added: data.added || [] };
+  renderList("audio", lists.audio, data.audioError);
+  renderList("video", lists.video, data.videoError);
+  renderList("added", lists.added, null);
+  $("forget-all").disabled = lists.added.length === 0;
+}
+
+async function convert(paths, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    await api("/api/convert", { paths, loudnorm: $("loudnorm").checked });
+    show("jobs");
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function convertPending(kind, btn) {
+  const paths = lists[kind].filter((f) => !f.missing).map((f) => f.source);
+  if (paths.length) pipeline(paths, btn);
+}
+
+// pipeline hands the file over and lets the server do both stages.
+async function pipeline(paths, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    await api("/api/pipeline", { paths });
+    show("jobs");
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// --- adding sources -------------------------------------------------------
+
+async function addPaths(paths) {
+  const err = $("add-err");
+  err.hidden = true;
+  if (!paths.length) return;
+  try {
+    const res = await api("/api/sources/add", { paths });
+    if (res.problems && res.problems.length) {
+      err.textContent = res.problems.join("  ·  ");
+      err.hidden = false;
+    }
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+  }
+  await loadFiles();
+}
+
+$("addpath").onclick = async () => {
+  const v = $("pathbox").value.trim();
+  if (!v) return;
+  await addPaths([v]);
+  $("pathbox").value = "";
+};
+$("pathbox").onkeydown = (e) => { if (e.key === "Enter") $("addpath").click(); };
+
+// Drag and drop.
+//
+// A browser hands JavaScript file *contents*, never a path, so the only usable
+// path is the file:// URI a file manager puts alongside them. Which MIME type
+// carries it differs between browsers and desktops, so several are tried, and
+// when none of them has one the drop reports what it *did* offer rather than
+// failing mutely.
+const drop = $("drop");
+
+function fileUrlToPath(u) {
+  try {
+    const url = new URL(u);
+    if (url.protocol !== "file:") return "";
+    let path = decodeURIComponent(url.pathname);
+    // Windows file URLs come through as /C:/Users/... — drop the leading slash.
+    if (/^\/[A-Za-z]:/.test(path)) path = path.slice(1);
+    return path;
+  } catch (e) {
+    return "";
+  }
+}
+
+function pathsFromDrop(dt) {
+  for (const type of ["text/uri-list", "text/x-moz-url", "text/plain"]) {
+    let raw = "";
+    try { raw = dt.getData(type) || ""; } catch (e) { continue; }
+    const out = raw.split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"))
+      .map((line) => line.startsWith("file://") ? fileUrlToPath(line)
+        // A dragged plain path is worth accepting too.
+        : (/^([/~]|[A-Za-z]:[\\/])/.test(line) ? line : ""))
+      .filter(Boolean);
+    if (out.length) return out;
+  }
+  return [];
+}
+
+// Accept a drop anywhere on the Library page, not only on the dashed box. The
+// box is the visible invitation; making it the only target means most attempts
+// land on the page instead and the browser simply opens the file.
+function libraryVisible() {
+  return !$("page-library").hidden;
+}
+
+for (const ev of ["dragenter", "dragover"]) {
+  document.addEventListener(ev, (e) => {
+    if (!libraryVisible()) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    drop.classList.add("over");
+  });
+}
+document.addEventListener("dragleave", (e) => {
+  // Only clear when the pointer actually leaves the window.
+  if (!e.relatedTarget) drop.classList.remove("over");
+});
+
+document.addEventListener("drop", async (e) => {
+  if (!libraryVisible()) return;
+  e.preventDefault();
+  drop.classList.remove("over");
+
+  const dt = e.dataTransfer;
+  const paths = pathsFromDrop(dt);
+  if (paths.length) { await addPaths(paths); return; }
+
+  const err = $("add-err");
+  const types = Array.from(dt.types || []).join(", ") || "none";
+  err.textContent = (dt.files && dt.files.length)
+    ? t("drop-nopath", types)
+    : t("drop-nothing", types);
+  err.hidden = false;
+  show("library");
+});
+
+// --- filesystem picker ----------------------------------------------------
+
+const picker = $("picker");
+let pkCurrent = "";
+let pkSelected = "";
+
+async function pkLoad(path) {
+  const q = new URLSearchParams({ path: path || "", hidden: $("pk-hidden").checked ? "1" : "0" });
+  let data;
+  try {
+    data = await api("/api/browse?" + q);
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  pkCurrent = data.path;
+  pkSelected = "";
+  $("pk-add").disabled = true;
+  $("pk-path").value = data.path;
+  $("pk-up").disabled = !data.parent;
+  $("pk-up").dataset.path = data.parent || "";
+
+  const body = $("pk-body");
+  body.innerHTML = "";
+  if (!data.entries.length) {
+    const d = document.createElement("div");
+    d.className = "empty";
+    d.textContent = "No folders or convertible media here.";
+    body.appendChild(d);
+  }
+  for (const en of data.entries) {
+    const row = document.createElement("div");
+    row.className = "entry";
+
+    const ico = document.createElement("span");
+    ico.className = "ico";
+    ico.textContent = en.dir ? "▸" : (en.kind === "video" ? "▦" : "♪");
+
+    const nm = document.createElement("span");
+    nm.className = "en";
+    nm.textContent = en.name;
+
+    const sz = document.createElement("span");
+    sz.className = "num";
+    sz.style.fontSize = "11px";
+    sz.textContent = en.dir ? "" : bytes(en.size);
+
+    row.append(ico, nm, sz);
+
+    if (en.dir) {
+      row.ondblclick = () => pkLoad(en.path);
+      row.onclick = () => pkLoad(en.path);
+    } else {
+      row.onclick = () => {
+        for (const r of body.querySelectorAll(".entry")) r.classList.remove("sel");
+        row.classList.add("sel");
+        pkSelected = en.path;
+        $("pk-add").disabled = false;
+      };
+      row.ondblclick = () => { pkSelected = en.path; pkCommit([en.path]); };
+    }
+    body.appendChild(row);
+  }
+}
+
+async function pkCommit(paths) {
+  picker.close();
+  await addPaths(paths);
+}
+
+$("browse").onclick = () => {
+  const sc = $("pk-shortcuts");
+  sc.innerHTML = "";
+  const shortcuts = [
+    ["Home", status.home],
+    ["Project", status.cwd],
+    ["audios", status.audioDir],
+    ["videos", status.videoDir],
+    ...(status.roots || []).map((r) => [r, r]),
+  ].filter(([, p]) => p);
+  for (const [label, path] of shortcuts) {
+    const b = document.createElement("button");
+    b.className = "b small";
+    b.textContent = label;
+    b.onclick = () => pkLoad(path);
+    sc.appendChild(b);
+  }
+  picker.showModal();
+  pkLoad(status.home || "");
+};
+$("pk-up").onclick = (e) => pkLoad(e.target.dataset.path);
+$("pk-go").onclick = () => pkLoad($("pk-path").value);
+$("pk-path").onkeydown = (e) => { if (e.key === "Enter") pkLoad($("pk-path").value); };
+$("pk-hidden").onchange = () => pkLoad(pkCurrent);
+$("pk-cancel").onclick = () => picker.close();
+$("pk-add").onclick = () => { if (pkSelected) pkCommit([pkSelected]); };
+$("pk-folder").onclick = () => { if (pkCurrent) pkCommit([pkCurrent]); };
+
+// --- models ---------------------------------------------------------------
+
+let models = { asr: [], vad: [] };
+
+async function loadModels() {
+  const box = $("model-list"), empty = $("model-empty");
+  try {
+    models = await api("/api/models");
+  } catch (e) {
+    box.innerHTML = "";
+    empty.hidden = false;
+    empty.textContent = e.message;
+    return;
+  }
+  $("model-path").textContent = models.dir || "";
+
+  box.innerHTML = "";
+  empty.hidden = (models.asr || []).length > 0;
+  if (models.error) empty.textContent = models.error;
+  else empty.textContent = "No ggml models found. Put ggml-*.bin files in the models folder.";
+
+  for (const m of models.asr || []) {
+    const row = document.createElement("label");
+    row.className = "mrow" + (m.recommended ? " rec" : "");
+    row.style.cursor = "pointer";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = m.path;
+    cb.className = "modelcb";
+    cb.style.marginTop = "3px";
+    cb.onchange = () => { updateTranscribeButtons(); savePrefs(); };
+
+    const main = document.createElement("div");
+    main.className = "mmain";
+    const nm = document.createElement("div");
+    nm.className = "mname";
+    nm.textContent = m.display || m.name;
+    if (m.recommended) {
+      const tag = document.createElement("span");
+      tag.className = "mrec";
+      tag.textContent = t("recommended");
+      nm.appendChild(tag);
+    }
+    const pub = document.createElement("div");
+    pub.className = "mpub";
+    pub.textContent = m.publisher + (m.license ? "  ·  " + m.license : "");
+    main.append(nm, pub);
+    if (m.notes) {
+      const note = document.createElement("div");
+      note.className = "mnote";
+      note.textContent = m.notes;
+      main.appendChild(note);
+    }
+
+    const stat = document.createElement("div");
+    stat.className = "mstat";
+    stat.append(document.createTextNode(bytes(m.size)));
+    if (m.wer) {
+      const wer = document.createElement("div");
+      wer.textContent = "WER " + (100 * m.wer).toFixed(1) + "%";
+      wer.title = m.werSource || "";
+      stat.appendChild(wer);
+    }
+
+    row.append(cb, main, stat);
+    box.appendChild(row);
+  }
+
+  // Models we know about but that are not on disk yet.
+  const av = $("model-avail");
+  av.innerHTML = "";
+  const avail = (models.available || []).filter((c) => !c.vad);
+  $("avail-hint").hidden = avail.length === 0;
+  for (const c of avail) {
+    const row = document.createElement("div");
+    row.className = "mrow";
+
+    const main = document.createElement("div");
+    main.className = "mmain";
+    const nm = document.createElement("div");
+    nm.className = "mname";
+    nm.textContent = c.display;
+    const pub = document.createElement("div");
+    pub.className = "mpub";
+    pub.textContent = c.publisher + (c.license ? "  ·  " + c.license : "");
+    main.append(nm, pub);
+    if (c.notes) {
+      const note = document.createElement("div");
+      note.className = "mnote";
+      note.textContent = c.notes;
+      main.appendChild(note);
+    }
+    // Some models ship as ready ggml files; others must be converted, and the
+    // command that does it is more use than a button that cannot work.
+    const how = document.createElement("div");
+    how.className = "mnote";
+    how.style.marginTop = "5px";
+    if (c.install) {
+      const code = document.createElement("span");
+      code.className = "path";
+      code.textContent = c.install;
+      how.append(document.createTextNode(t("install-with") + " "), code);
+    } else if (c.url) {
+      const code = document.createElement("span");
+      code.className = "path";
+      code.textContent = "make models";
+      how.append(document.createTextNode(t("install-with") + " "), code);
+    }
+    main.appendChild(how);
+
+    const stat = document.createElement("div");
+    stat.className = "mstat";
+    if (c.bytes) stat.append(document.createTextNode(bytes(c.bytes)));
+    if (c.wer) {
+      const wer = document.createElement("div");
+      wer.textContent = "WER " + (100 * c.wer).toFixed(1) + "%";
+      wer.title = c.werSource || "";
+      stat.appendChild(wer);
+    }
+    if (c.rtf) {
+      const r = document.createElement("div");
+      r.textContent = t("speed") + " " + c.rtf.toFixed(3);
+      stat.appendChild(r);
+    }
+
+    row.append(main, stat);
+    av.appendChild(row);
+  }
+  // Default to the recommended model, so someone who never opens this page
+  // still gets the one we would have chosen for them.
+  if (!chosenModels().length) {
+    const rec = (models.asr || []).find((m) => m.recommended);
+    const want = rec ? rec.path : ((models.asr || [])[0] || {}).path;
+    for (const cb of box.querySelectorAll(".modelcb")) {
+      if (cb.value === want) cb.checked = true;
+    }
+  }
+
+  const sel = $("vad-model");
+  sel.innerHTML = "";
+  for (const m of models.vad || []) {
+    const o = document.createElement("option");
+    o.value = m.path;
+    o.textContent = (m.display || m.name) + (m.publisher && m.known ? "  ·  " + m.publisher : "");
+    sel.appendChild(o);
+  }
+  if (!(models.vad || []).length) {
+    const o = document.createElement("option");
+    o.value = "";
+    o.textContent = "no VAD model found";
+    sel.appendChild(o);
+    $("use-vad").checked = false;
+    $("use-vad").disabled = true;
+  }
+  updateTranscribeButtons();
+}
+
+function chosenModels() {
+  return [...document.querySelectorAll(".modelcb:checked")].map((c) => c.value);
+}
+function chosenWavs() {
+  return [...document.querySelectorAll(".wavcb:checked")].map((c) => c.value);
+}
+
+function updateTranscribeButtons() {
+  const nm = chosenModels().length;
+  const ready = wavs.filter((f) => f.ready);
+  $("all-wavs").disabled = nm === 0 || ready.length === 0;
+  $("all-wavs").textContent = nm > 1 ? `Transcribe all x${nm} models` : "Transcribe all";
+  for (const b of document.querySelectorAll(".trbtn")) b.disabled = nm === 0;
+}
+
+// --- GPU ------------------------------------------------------------------
+
+let engines = [];
+
+// GPU is on by default whenever a driver actually works -- it is several times
+// faster and there is no downside once the probe has confirmed a usable device.
+// An explicit choice by the user overrides that and is remembered.
+function gpuPref() {
+  try {
+    return localStorage.getItem("useGpu");
+  } catch (e) {
+    return null; // private windows and blocked site data
+  }
+}
+function setGpuPref(v) {
+  try {
+    localStorage.setItem("useGpu", v ? "1" : "0");
+  } catch (e) { /* preference simply is not remembered */ }
+}
+
+function renderGPU(state, checking) {
+  const tag = $("gpu-status"), why = $("gpu-why"),
+        cb = $("use-gpu"), picker = $("gpu-picker"), drv = $("gpu-driver");
+
+  if (checking) {
+    tag.className = "tag";
+    tag.textContent = "checking…";
+    cb.disabled = true;
+    picker.hidden = true;
+    why.hidden = true;
+    return;
+  }
+
+  engines = (state && state.engines) || [];
+  const usable = engines.filter((e) => e.available);
+
+  if (!usable.length) {
+    tag.className = "tag err";
+    tag.textContent = "unavailable";
+    cb.checked = false;
+    cb.disabled = true;
+    picker.hidden = true;
+    why.hidden = false;
+    // Say what was tried and why each one failed, in the engine's own words.
+    why.textContent = engines.length
+      ? engines.map((e) => e.backend + ": " + (e.reason || "not usable")).join("   ·   ")
+      : ((state && state.error) || "No GPU driver could be used.");
+    return;
+  }
+
+  tag.className = "tag ok";
+  tag.textContent = usable.map((e) => e.backend).join(" / ") + " available";
+  cb.disabled = false;
+  why.hidden = true;
+
+  const pref = gpuPref();
+  cb.checked = pref === null ? true : pref === "1";
+
+  const prev = drv.value;
+  drv.innerHTML = "";
+  for (const e of usable) {
+    const o = document.createElement("option");
+    o.value = e.backend;
+    o.textContent = e.backend.toUpperCase();
+    drv.appendChild(o);
+  }
+  if (usable.some((e) => e.backend === prev)) drv.value = prev;
+  renderDevices();
+  picker.hidden = !cb.checked;
+  $("gpu-device").disabled = !cb.checked;
+}
+
+function renderDevices() {
+  const drv = $("gpu-driver"), sel = $("gpu-device");
+  const e = engines.find((x) => x.backend === drv.value);
+  const prev = sel.value;
+  sel.innerHTML = "";
+  if (!e) return;
+
+  for (const d of e.devices || []) {
+    const o = document.createElement("option");
+    o.value = String(d.index);
+    // Flag unified-memory devices: they share the memory bandwidth the encoder
+    // is already limited by, so they are often no faster than the CPU.
+    o.textContent = d.index + ": " + d.name + (d.integrated ? "  (integrated — may not beat CPU)" : "");
+    sel.appendChild(o);
+  }
+  // Prefer a discrete device: on hybrid laptops index 0 is usually the iGPU.
+  const discrete = (e.devices || []).find((d) => !d.integrated);
+  if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+  else if (discrete) sel.value = String(discrete.index);
+}
+
+async function loadGPU(refresh) {
+  renderGPU(null, true);
+  try {
+    renderGPU(await api("/api/gpu" + (refresh ? "?refresh=1" : "")), false);
+  } catch (e) {
+    renderGPU({ engines: [], error: e.message }, false);
+  }
+}
+
+// --- glossary -------------------------------------------------------------
+
+async function loadGlossary() {
+  try {
+    const g = await api("/api/glossary");
+    $("gl-text").value = g.text || "";
+    showGlossaryStatus(g);
+  } catch (e) { /* leave the box as it is */ }
+}
+
+function showGlossaryStatus(g) {
+  $("gl-status").textContent = t("terms-n", g.terms);
+  // whisper only reads so much of a prompt; say so rather than silently
+  // dropping the tail of the list.
+  $("gl-note").textContent = g.trimmed ? t("gl-trimmed", g.limit) : "";
+  $("gl-note").className = g.trimmed ? "err-text" : "path";
+}
+
+$("gl-save").onclick = async () => {
+  try {
+    showGlossaryStatus(await api("/api/glossary", { text: $("gl-text").value }));
+  } catch (e) {
+    alert(e.message);
+  }
+};
+
+// --- settings the pipeline reuses ------------------------------------------
+//
+// The one-click path starts from the Library, which has none of these controls
+// on screen, so the server keeps the last choice and the page just reports it.
+
+function savePrefs() {
+  const payload = {
+    models: chosenModels(),
+    vadModel: $("vad-model").value,
+    useVad: $("use-vad").checked,
+    language: $("lang").value.trim() || "tr",
+    threads: parseInt($("threads").value, 10) || 0,
+    beamSize: parseInt($("beam").value, 10) || 0,
+    useGpu: $("use-gpu").checked,
+    backend: $("gpu-driver").value,
+    device: parseInt($("gpu-device").value, 10) || 0,
+    loudnorm: $("loudnorm").checked,
+  };
+  api("/api/prefs", payload).catch(() => { /* not fatal */ });
+}
+
+// --- converted WAVs -------------------------------------------------------
+
+let wavs = [];
+
+function clock(sec) {
+  if (!sec) return "—";
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s2 = Math.round(sec % 60);
+  const pad = (n) => String(n).padStart(2, "0");
+  return h ? h + ":" + pad(m) + ":" + pad(s2) : m + ":" + pad(s2);
+}
+
+async function loadWavs() {
+  try {
+    wavs = await api("/api/wavs");
+  } catch (e) {
+    return;
+  }
+  $("wavcount").textContent = wavs.length;
+
+  const tbody = $("list-wavs");
+  tbody.innerHTML = "";
+  $("empty-wavs").hidden = wavs.length > 0;
+
+  for (const f of wavs) {
+    const tr = document.createElement("tr");
+
+    const pick = document.createElement("td");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "wavcb";
+    cb.value = f.path;
+    cb.disabled = !f.ready;
+    pick.appendChild(cb);
+
+    const name = document.createElement("td");
+    const n = document.createElement("div");
+    n.className = "name";
+    n.textContent = f.name;
+    const p = document.createElement("div");
+    p.className = "path";
+    p.textContent = f.kind + "/";
+    name.append(n, p);
+
+    // whisper.cpp reads only 16-bit PCM and Whisper wants 16 kHz mono, so a
+    // mismatch here is a failure waiting to happen; flag it before it runs.
+    const fmt = document.createElement("td");
+    const tag = document.createElement("span");
+    if (f.error) {
+      tag.className = "tag err";
+      tag.textContent = f.error;
+    } else {
+      tag.className = "tag" + (f.ready ? " ok" : " err");
+      tag.textContent = (f.sampleRate / 1000) + " kHz · "
+        + (f.channels === 1 ? "mono" : f.channels + " ch") + " · " + f.bits + "-bit";
+    }
+    fmt.appendChild(tag);
+
+    const dur = document.createElement("td");
+    dur.className = "num";
+    dur.textContent = clock(f.seconds);
+
+    const act = document.createElement("td");
+    act.className = "act";
+    const btn = document.createElement("button");
+    btn.className = "b small primary trbtn";
+    btn.textContent = "Transcribe";
+    btn.disabled = !f.ready;
+    if (!f.ready) btn.title = "whisper.cpp needs 16 kHz mono 16-bit PCM";
+    btn.onclick = () => transcribe([f.path], btn);
+    act.appendChild(btn);
+
+    tr.append(pick, name, fmt, dur, act);
+    tbody.appendChild(tr);
+  }
+
+  updateTranscribeButtons();
+}
+
+async function transcribe(paths, btn) {
+  const err = $("tr-err");
+  err.hidden = true;
+  const chosen = chosenModels();
+  if (!chosen.length) {
+    err.textContent = "Tick at least one model first.";
+    err.hidden = false;
+    return;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    await api("/api/transcribe", {
+      paths,
+      models: chosen,
+      useVad: $("use-vad").checked,
+      vadModel: $("vad-model").value,
+      language: $("lang").value.trim() || "tr",
+      threads: parseInt($("threads").value, 10) || 0,
+      beamSize: parseInt($("beam").value, 10) || 0,
+      useGpu: $("use-gpu").checked,
+      backend: $("gpu-driver").value,
+      device: parseInt($("gpu-device").value, 10) || 0,
+    });
+    show("jobs");
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// --- review ---------------------------------------------------------------
+//
+// The transcript is the interface: one document, with the flagged words
+// underlined in place. Selecting a word -- by clicking it or by stepping with
+// the keyboard -- plays its audio and opens it for editing in the bar above.
+// There is no separate queue screen, because there was only ever one document.
+
+let rvItems = [];
+let rvCur = null;          // the transcript being checked
+let rvSpans = new Map();   // spanId -> span data
+let rvEls = new Map();     // spanId -> the rendered word
+let rvOrder = [];          // spanIds in reading order
+let rvSel = null;          // selected spanId
+let rvExtra = 0;           // seconds added by "+5s"
+let rvSegs = [];           // the rendered lines, for whole-line rewrites
+
+// The confidence cutoff belongs to the reviewer, not to us. A careful pass over
+// a poor recording wants a high one; a quick check of a clean one wants a low
+// one. 0.5 is only where the slider starts.
+let rvThresh = (() => {
+  try {
+    const v = parseFloat(localStorage.getItem("threshold"));
+    if (v > 0 && v <= 1) return v;
+  } catch (e) { /* blocked storage */ }
+  return 0.5;
+})();
+
+async function loadReviewList() {
+  try {
+    rvItems = await api("/api/review/list?threshold=" + rvThresh);
+  } catch (e) {
+    return;
+  }
+  const tbody = $("review-list");
+  tbody.innerHTML = "";
+  $("review-empty").hidden = rvItems.length > 0;
+
+  let outstanding = 0;
+  for (const it of rvItems) {
+    outstanding += Math.max(0, it.spans - it.reviewed);
+    const tr = document.createElement("tr");
+
+    const name = document.createElement("td");
+    const n = document.createElement("div");
+    n.className = "name";
+    n.textContent = it.source || it.name;
+    name.appendChild(n);
+    if (!it.audioFound) {
+      const w = document.createElement("div");
+      w.className = "err-text";
+      w.textContent = t("no-audio");
+      name.appendChild(w);
+    }
+    if (!it.aligned) {
+      // Without -dtw the word timestamps are guesses, so clips play the wrong
+      // part of the recording even though the displayed time looks right.
+      const w = document.createElement("div");
+      w.className = "err-text";
+      w.textContent = t("unaligned");
+      name.appendChild(w);
+    }
+
+    const model = document.createElement("td");
+    model.className = "path";
+    model.textContent = it.model;
+
+    // Repeat runs of the same audio are numbered, so the newest is obvious.
+    const run = document.createElement("td");
+    run.className = "num";
+    run.textContent = it.run > 1 ? "#" + it.run : "#1";
+    if (it.run > 1) run.style.color = "var(--text)";
+
+    const left = document.createElement("td");
+    left.className = "num";
+    left.textContent = it.reviewed + " / " + it.spans;
+
+    const act = document.createElement("td");
+    act.className = "act";
+    const b = document.createElement("button");
+    b.className = "b small primary";
+    b.textContent = t("open");
+    b.onclick = () => openDoc(it);
+    act.appendChild(b);
+
+    const del = document.createElement("button");
+    del.className = "b small";
+    del.style.marginLeft = "6px";
+    del.textContent = t("delete");
+    del.onclick = async () => {
+      const reviewed = it.reviewed > 0
+        ? "\n\n" + t("del-reviewed", it.reviewed) : "";
+      if (!confirm(t("del-confirm", it.source || it.name, it.run) + reviewed)) return;
+      try {
+        await api("/api/review/delete", { path: it.path });
+      } catch (e) {
+        alert(e.message);
+        return;
+      }
+      // Close the panel if the transcript being read was the one removed.
+      if (rvCur && rvCur.path === it.path) {
+        $("rv-panel").hidden = true;
+        rvCur = null;
+        dropClip();
+      }
+      loadReviewList();
+    };
+    act.appendChild(del);
+
+    tr.append(name, model, run, left, act);
+    tbody.appendChild(tr);
+  }
+  $("revcount").textContent = outstanding;
+}
+
+async function openDoc(item) {
+  let doc, spans;
+  try {
+    const q = encodeURIComponent(item.path) + "&threshold=" + rvThresh;
+    [doc, spans] = await Promise.all([
+      api("/api/review/text?path=" + q),
+      api("/api/review/spans?path=" + q),
+    ]);
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+
+  rvCur = item;
+  rvSpans = new Map();
+  rvOrder = [];
+  for (const sp of spans.spans || []) {
+    rvSpans.set(sp.id, sp);
+    rvOrder.push(sp.id);
+  }
+
+  $("rv-panel").hidden = false;
+  $("rv-title").textContent = item.name + (item.aligned ? "" : "   \u26a0 " + t("unaligned-short"));
+  renderDoc(doc.segments || []);
+
+  // Start at the first word still to be checked.
+  const next = rvOrder.find((id) => !rvSpans.get(id).decision);
+  select(next || rvOrder[0] || null);
+  $("rv-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderDoc(segs) {
+  const doc = $("rv-doc");
+  doc.innerHTML = "";
+  rvEls = new Map();
+
+  rvSegs = segs;
+  for (const seg of segs) {
+    const row = document.createElement("div");
+    row.className = "vseg" + (seg.edited ? " rewritten" : "");
+    row.dataset.seg = seg.index;
+
+    const ts = document.createElement("div");
+    ts.className = "vts";
+
+    // Play this whole line, without disturbing the word currently selected.
+    const play = document.createElement("button");
+    play.className = "lbtn play";
+    play.textContent = "\u25b6";
+    play.title = t("play-line");
+    play.onclick = (e) => { e.stopPropagation(); playRange(seg.start - 0.2, seg.end + 0.4); };
+
+    // The timestamp is the handle for rewriting the whole line.
+    const tbtn = document.createElement("button");
+    tbtn.className = "lbtn time";
+    tbtn.textContent = clock(seg.start);
+    tbtn.title = t("edit-line");
+    tbtn.onclick = () => editLine(seg, row);
+
+    ts.append(play, tbtn);
+
+    const line = document.createElement("div");
+    line.className = "vtext";
+    for (const wd of seg.words) {
+      const el = document.createElement("span");
+      el.className = "vw";
+      el.textContent = wd.text;
+      if (wd.spanId) {
+        el.classList.add("flag");
+        el.dataset.conf = (wd.confidence || 0).toFixed(2);
+        rvEls.set(wd.spanId, el);
+        paintWord(el, wd.decision, wd.edited);
+        el.onclick = () => select(wd.spanId);
+      } else if (wd.edited) {
+        el.classList.add("edited");
+      }
+      line.append(el, document.createTextNode(" "));
+    }
+    row.append(ts, line);
+    doc.appendChild(row);
+  }
+  updateProgress();
+}
+
+// editLine swaps a line for a text box holding the whole sentence. Word-level
+// flags cannot express an error that spans several words, or a word the engine
+// dropped, so the line itself has to be editable.
+function editLine(seg, row) {
+  if (row.classList.contains("editing")) return;
+  const original = seg.text || "";
+  row.classList.add("editing");
+  const keep = [...row.childNodes];
+  for (const n of keep) n.remove();
+
+  const box = document.createElement("div");
+  box.className = "lineedit";
+
+  const ta = document.createElement("textarea");
+  ta.value = original;
+  ta.spellcheck = false;
+
+  const btns = document.createElement("div");
+  btns.style.cssText = "display:flex;flex-direction:column;gap:6px";
+  const save = document.createElement("button");
+  save.className = "b small primary";
+  save.textContent = t("save");
+  const cancel = document.createElement("button");
+  cancel.className = "b small";
+  cancel.textContent = t("cancel");
+  const revert = document.createElement("button");
+  revert.className = "b small";
+  revert.textContent = t("revert");
+  revert.hidden = !seg.edited;
+  btns.append(save, cancel, revert);
+
+  box.append(ta, btns);
+  row.appendChild(box);
+  ta.focus();
+
+  const finish = () => { row.classList.remove("editing"); reloadDoc(); };
+
+  const send = async (body) => {
+    try {
+      await api("/api/review/segment", Object.assign({
+        path: rvCur.path, segment: seg.index, original,
+        model: rvCur.model, video: rvCur.name, audio: rvCur.audio,
+        start: seg.start, end: seg.end,
+      }, body));
+    } catch (e) {
+      $("rv-err").textContent = e.message;
+      $("rv-err").hidden = false;
+      return;
+    }
+    finish();
+  };
+
+  save.onclick = () => send({ text: ta.value.trim() });
+  revert.onclick = () => send({ revert: true });
+  cancel.onclick = () => { row.classList.remove("editing"); reloadDoc(); };
+
+  // Enter saves, shift+enter makes a new line, escape backs out.
+  ta.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save.click(); }
+    if (e.key === "Escape") { e.preventDefault(); cancel.click(); }
+  };
+}
+
+// reloadDoc refetches the document, which is simpler and safer than patching
+// the DOM after a rewrite: word indices shift and flags may disappear.
+async function reloadDoc() {
+  if (!rvCur) return;
+  const q = encodeURIComponent(rvCur.path) + "&threshold=" + rvThresh;
+  try {
+    const [doc, spans] = await Promise.all([
+      api("/api/review/text?path=" + q),
+      api("/api/review/spans?path=" + q),
+    ]);
+    rvSpans = new Map();
+    rvOrder = [];
+    for (const sp of spans.spans || []) {
+      rvSpans.set(sp.id, sp);
+      rvOrder.push(sp.id);
+    }
+    renderDoc(doc.segments || []);
+    if (rvSel && rvSpans.has(rvSel)) select(rvSel);
+    else select(rvOrder.find((id) => !rvSpans.get(id).decision) || rvOrder[0] || null);
+  } catch (e) { /* leave the current view in place */ }
+  loadReviewList();
+}
+
+function paintWord(el, decision, edited) {
+  el.classList.remove("done", "edited");
+  if (edited) el.classList.add("edited");
+  else if (decision) el.classList.add("done");
+  el.title = edited ? t("corrected")
+    : (decision ? t("d-" + decision) : t("confidence") + " " + (el.dataset.conf || "?"));
+}
+
+function updateProgress() {
+  let done = 0;
+  for (const id of rvOrder) if (rvSpans.get(id).decision) done++;
+  const total = rvOrder.length;
+  $("rv-bar").style.width = (100 * done / Math.max(total, 1)).toFixed(1) + "%";
+  $("rv-progress").textContent = t("checked-of", done, total);
+  $("th-count").textContent = t("flagged-n", total);
+}
+
+function select(spanId) {
+  for (const el of rvEls.values()) el.classList.remove("selword");
+  rvSel = spanId;
+  rvExtra = 0;
+  $("rv-err").hidden = true;
+
+  const sp = spanId && rvSpans.get(spanId);
+  const el = spanId && rvEls.get(spanId);
+  if (!sp || !el) {
+    $("rv-input").value = "";
+    $("rv-flags").textContent = "";
+    return;
+  }
+
+  el.classList.add("selword");
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  $("rv-input").value = sp.corrected || sp.text;
+  $("rv-flags").textContent =
+    sp.flags.map((f) => t("f-" + f)).join(", ") + "  ·  " +
+    t("confidence") + " " + sp.confidence.toFixed(2) +
+    (sp.decision ? "  ·  " + t("d-" + sp.decision) : "");
+  loadClip(sp);
+}
+
+function step(delta) {
+  if (!rvOrder.length) return;
+  const at = rvOrder.indexOf(rvSel);
+  let next = at + delta;
+  if (next < 0) next = 0;
+  if (next > rvOrder.length - 1) next = rvOrder.length - 1;
+  select(rvOrder[next]);
+}
+
+async function decide(kind) {
+  const sp = rvSel && rvSpans.get(rvSel);
+  if (!sp) return;
+  const corrected = $("rv-input").value.trim();
+
+  // "Save" on unchanged text is a confirmation, not an edit.
+  if (kind === "edited" && corrected === sp.text) kind = "accepted";
+
+  try {
+    await api("/api/review/decide", {
+      path: rvCur.path, spanId: sp.id, decision: kind,
+      corrected: kind === "edited" ? corrected : "",
+      original: sp.text, model: rvCur.model, video: rvCur.name,
+      audio: rvCur.audio, start: sp.start, end: sp.end,
+      confidence: sp.confidence, flags: sp.flags,
+    });
+  } catch (e) {
+    $("rv-err").textContent = e.message;
+    $("rv-err").hidden = false;
+    return;
+  }
+
+  sp.decision = kind;
+  sp.corrected = kind === "edited" ? corrected : "";
+  const el = rvEls.get(sp.id);
+  if (el) {
+    if (kind === "edited" && corrected) el.textContent = corrected;
+    paintWord(el, kind, kind === "edited");
+  }
+  updateProgress();
+  loadReviewList();
+
+  // Move to the next word still needing a decision, else simply the next one.
+  const at = rvOrder.indexOf(sp.id);
+  const nextUnchecked = rvOrder.slice(at + 1).find((id) => !rvSpans.get(id).decision);
+  select(nextUnchecked || rvOrder[Math.min(at + 1, rvOrder.length - 1)]);
+}
+
+// --- clip playback ---------------------------------------------------------
+//
+// The clip is fetched as a blob and handed over as an object URL rather than
+// pointing src at the endpoint: assigning a network src starts a load that
+// races play() and aborts it, which left the audio silent when moving on.
+let clipSeq = 0;
+
+// loadClip plays the window around the selected word.
+function loadClip(sp) {
+  return playRange(sp.clipStart - rvExtra, sp.clipEnd + rvExtra);
+}
+
+// playRange fetches an arbitrary stretch of the recording and plays it.
+async function playRange(start, end) {
+  const au = $("rv-audio");
+  const seq = ++clipSeq;
+
+  au.pause();
+  if (!rvCur || !rvCur.audioFound) {
+    au.removeAttribute("src");
+    $("rv-play").disabled = true;
+    $("rv-more").disabled = true;
+    return;
+  }
+  $("rv-play").disabled = false;
+  $("rv-more").disabled = false;
+
+  const url = "/api/review/clip?wav=" + encodeURIComponent(rvCur.audio)
+    + "&start=" + Math.max(0, start) + "&end=" + end + "&pad=0";
+
+  let obj;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(await res.text());
+    obj = URL.createObjectURL(await res.blob());
+  } catch (e) {
+    if (seq === clipSeq) $("rv-play").textContent = t("audio-unavailable");
+    return;
+  }
+  if (seq !== clipSeq) { URL.revokeObjectURL(obj); return; }
+
+  if (au.dataset.obj) URL.revokeObjectURL(au.dataset.obj);
+  au.dataset.obj = obj;
+  au.src = obj;
+  au.currentTime = 0;
+  $("rv-play").textContent = "\u25b6 " + t("play");
+  au.play().catch(() => { $("rv-play").textContent = "\u25b6 " + t("press-space"); });
+}
+
+function dropClip() {
+  const a = $("rv-audio");
+  a.pause();
+  if (a.dataset.obj) {
+    URL.revokeObjectURL(a.dataset.obj);
+    delete a.dataset.obj;
+  }
+  a.removeAttribute("src");
+}
+
+function download(format) {
+  if (!rvCur) return;
+  window.location = "/api/review/download?format=" + format
+    + "&path=" + encodeURIComponent(rvCur.path);
+}
+
+// --- wiring ----------------------------------------------------------------
+
+// Redrawing the whole document on every drag step would be wasteful, so the
+// value updates live and the refetch waits until the slider settles.
+let threshTimer = null;
+$("th-range").value = rvThresh;
+$("th-value").textContent = rvThresh.toFixed(2);
+$("th-range").oninput = (e) => {
+  rvThresh = parseFloat(e.target.value);
+  $("th-value").textContent = rvThresh.toFixed(2);
+  try { localStorage.setItem("threshold", String(rvThresh)); } catch (err) { /* not remembered */ }
+  clearTimeout(threshTimer);
+  threshTimer = setTimeout(() => { if (rvCur) reloadDoc(); else loadReviewList(); }, 250);
+};
+
+$("rescan-review").onclick = loadReviewList;
+$("rv-close").onclick = () => { $("rv-panel").hidden = true; dropClip(); };
+$("rv-dl-txt").onclick = () => download("txt");
+$("rv-dl-srt").onclick = () => download("srt");
+$("rv-save").onclick = () => decide("edited");
+$("rv-ok").onclick = () => decide("accepted");
+$("rv-not").onclick = () => decide("not_an_error");
+$("rv-skip").onclick = () => step(1);
+$("rv-play").onclick = () => {
+  const a = $("rv-audio");
+  if (!a.src) return;
+  a.currentTime = 0;
+  a.play().catch(() => {});
+};
+// Widen the window when five seconds is not enough to settle the word.
+$("rv-more").onclick = () => {
+  const sp = rvSel && rvSpans.get(rvSel);
+  if (!sp) return;
+  rvExtra += 5;
+  loadClip(sp);
+};
+
+document.addEventListener("keydown", (e) => {
+  if ($("page-review").hidden || $("rv-panel").hidden || !rvSel) return;
+  const typing = document.activeElement === $("rv-input");
+
+  if (e.key === "Enter") { e.preventDefault(); decide("edited"); return; }
+  if (e.key === "Tab")   { e.preventDefault(); step(1); return; }
+  if (e.key === " " && !typing) { e.preventDefault(); $("rv-play").click(); return; }
+  if (typing) return; // letters are text while editing
+  if (e.key === "a") { e.preventDefault(); decide("accepted"); }
+  if (e.key === "n") { e.preventDefault(); decide("not_an_error"); }
+  if (e.key === "e") { e.preventDefault(); $("rv-input").focus(); $("rv-input").select(); }
+  if (e.key === "k") { e.preventDefault(); step(-1); }
+});
+
+// --- dataset --------------------------------------------------------------
+
+async function loadDataset() {
+  const tbody = $("dataset-rows");
+  let d;
+  try {
+    d = await api("/api/dataset");
+  } catch (e) {
+    tbody.innerHTML = "";
+    return;
+  }
+
+  const rows = [
+    ["Reviewed corrections", d.records, d.records ? "" : "none yet — review a transcript first"],
+    ["Audio clips", d.clips, ""],
+    ["Transcripts", d.transcripts, ""],
+    ["Recordings covered", (d.videos || []).length, (d.videos || []).join(", ")],
+    ["Total size", bytes(d.bytes), ""],
+  ];
+  tbody.innerHTML = "";
+  for (const [label, value, note] of rows) {
+    const tr = document.createElement("tr");
+    const a = document.createElement("td");
+    a.textContent = label;
+    const b = document.createElement("td");
+    b.className = "num";
+    b.style.textAlign = "left";
+    b.style.color = "var(--text)";
+    b.textContent = value;
+    const c = document.createElement("td");
+    c.className = "path";
+    c.textContent = note;
+    tr.append(a, b, c);
+    tbody.appendChild(tr);
+  }
+  $("ds-download").disabled = !!d.empty;
+  $("ds-err").hidden = true;
+}
+
+$("ds-download").onclick = () => {
+  const err = $("ds-err");
+  err.hidden = true;
+  const note = $("ds-note").value.trim();
+  // A plain navigation, so the browser handles it as a normal download and the
+  // zip streams straight from the server without being held in memory.
+  window.location = "/api/dataset/export" + (note ? "?note=" + encodeURIComponent(note) : "");
+};
+
+// --- jobs -----------------------------------------------------------------
+
+function renderJobs(jobs) {
+  const tbody = $("jobs");
+  $("jobs-empty").hidden = jobs.length > 0;
+  tbody.innerHTML = "";
+
+  const active = jobs.filter((j) => j.state === "running" || j.state === "queued").length;
+  $("jobcount").textContent = active || jobs.length;
+
+  for (const j of jobs) {
+    const tr = document.createElement("tr");
+
+    const name = document.createElement("td");
+    const n = document.createElement("div");
+    n.className = "name";
+    n.textContent = j.name;
+    const p = document.createElement("div");
+    p.className = "path";
+    p.textContent = (j.model ? j.model + " → " : j.kind + " → ") + j.output;
+    name.append(n, p);
+
+    const prog = document.createElement("td");
+    if (j.state === "running" || j.state === "queued") {
+      const bar = document.createElement("div");
+      bar.className = "bar" + (j.percent < 0 ? " indet" : "");
+      const fill = document.createElement("i");
+      fill.style.width = j.percent < 0 ? "" : j.percent.toFixed(1) + "%";
+      bar.appendChild(fill);
+      const cap = document.createElement("div");
+      cap.style.cssText = "font-size:11px;color:var(--muted)";
+      cap.textContent = j.state === "queued" ? t("queued")
+        : (j.percent < 0 ? t("working") : j.percent.toFixed(0) + "%")
+          + "  " + secs(j.elapsed)
+          + (j.eta > 0 ? "   ·   " + t("left", eta(j.eta)) : "");
+      prog.append(bar, cap);
+    } else if (j.error) {
+      const e = document.createElement("div");
+      e.className = "err-text";
+      e.textContent = j.error;
+      prog.appendChild(e);
+    } else {
+      const tag = document.createElement("span");
+      tag.className = "tag ok";
+      tag.textContent = "done in " + secs(j.elapsed);
+      prog.appendChild(tag);
+    }
+
+    const result = document.createElement("td");
+    result.className = "num";
+    if (j.state === "done") result.textContent = bytes(j.outSize);
+    else if (j.state !== "running" && j.state !== "queued") {
+      const tag = document.createElement("span");
+      tag.className = "tag err";
+      tag.textContent = j.state;
+      result.appendChild(tag);
+    }
+
+    const act = document.createElement("td");
+    act.className = "act";
+    if (j.state === "running" || j.state === "queued") {
+      const btn = document.createElement("button");
+      btn.className = "b small";
+      btn.textContent = "Cancel";
+      btn.onclick = () => api("/api/cancel", { id: j.id }).catch((e) => alert(e.message));
+      act.appendChild(btn);
+    }
+
+    tr.append(name, prog, result, act);
+    tbody.appendChild(tr);
+  }
+}
+
+// Reload the file lists whenever a job settles, so the WAV column is accurate.
+let lastSettled = "";
+
+function connect() {
+  const es = new EventSource("/api/events");
+  es.onmessage = (ev) => {
+    const st = JSON.parse(ev.data);
+    renderJobs(st.jobs);
+    const settled = st.jobs.filter((j) => j.state !== "running" && j.state !== "queued")
+      .map((j) => j.id).join(",");
+    if (settled !== lastSettled) { lastSettled = settled; loadFiles(); loadWavs(); }
+  };
+  // EventSource retries on its own, but not after a clean server close.
+  es.onerror = () => { es.close(); setTimeout(connect, 2000); };
+}
+
+// --- wiring ---------------------------------------------------------------
+
+$("rescan-wavs").onclick = loadWavs;
+$("rescan-models").onclick = loadModels;
+for (const id of ["use-vad", "vad-model", "lang", "threads", "beam", "loudnorm", "gpu-device"]) {
+  const el = $(id);
+  if (el) el.addEventListener("change", savePrefs);
+}
+$("recheck-gpu").onclick = () => loadGPU(true);
+$("rescan-dataset").onclick = loadDataset;
+$("use-gpu").onchange = () => {
+  const on = $("use-gpu").checked;
+  $("gpu-picker").hidden = !on;
+  $("gpu-device").disabled = !on;
+  setGpuPref(on);
+  savePrefs();
+};
+$("gpu-driver").onchange = () => { renderDevices(); savePrefs(); };
+$("use-vad").onchange = () => { $("vad-model").disabled = !$("use-vad").checked; };
+$("all-wavs").onclick = (e) => {
+  // Ticked rows if any, otherwise every usable file.
+  const picked = chosenWavs();
+  const paths = picked.length ? picked : wavs.filter((f) => f.ready).map((f) => f.path);
+  if (paths.length) transcribe(paths, e.target);
+};
+$("rescan-audio").onclick = loadFiles;
+$("rescan-video").onclick = loadFiles;
+$("all-audio").onclick = (e) => convertPending("audio", e.target);
+$("all-video").onclick = (e) => convertPending("video", e.target);
+$("all-added").onclick = (e) => convertPending("added", e.target);
+$("forget-all").onclick = () => api("/api/sources/remove", { all: true }).then(loadFiles);
+$("clear").onclick = () => api("/api/clear", {}).catch((e) => alert(e.message));
+
+$("apply").onclick = async () => {
+  const err = $("cfg-err");
+  err.hidden = true;
+  try {
+    await api("/api/config", {
+      audioDir: $("in-audio").value,
+      videoDir: $("in-video").value,
+      outputDir: $("in-output").value,
+    });
+    await loadStatus();
+    await loadFiles();
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+  }
+};
+
+$("ui-lang").onchange = (e) => setLang(e.target.value);
+
+loadStatus().then(loadFiles).then(loadWavs).then(loadModels).then(loadGlossary).then(connect)
+  .then(applyLang)
+  .catch((e) => alert(e.message));
+</script>
+</body>
+</html>

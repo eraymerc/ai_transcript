@@ -1,0 +1,9 @@
+# Model weights are large and reproducible: the official ones come from
+# `make models`, and the Turkish fine-tunes from `make model-turkish` /
+# `make model-buzz`. Keeping them out of the repository keeps it clonable.
+#
+# This file is itself tracked, so the folder exists on a fresh checkout and the
+# program has somewhere to put them.
+*.bin
+*.bin.part
+*.gguf

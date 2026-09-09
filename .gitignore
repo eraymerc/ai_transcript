@@ -1,0 +1,60 @@
+# What belongs in the repository is the source, the plans and the build recipe.
+# Everything below is either produced by `make`, downloaded, or someone's own
+# recordings — with one deliberate exception, noted at the bottom.
+
+# --- built or vendored engines ---------------------------------------------
+# `make linux` builds these; `make windows` / `make windows-ffmpeg` fetch them.
+binaries/linux/*
+binaries/windows/*.exe
+binaries/windows/*.dll
+binaries/windows/cuda/
+!binaries/*/PROVENANCE.md
+!binaries/*/FFMPEG-LICENSE.txt
+
+# --- build trees ------------------------------------------------------------
+# whisper.cpp checkout, cmake output, the throwaway torch venv for conversions.
+.build/
+
+# --- assembled releases -----------------------------------------------------
+release_linux/
+release_windows/
+
+# --- the program's own output ----------------------------------------------
+# Converted audio, transcripts, review state, job queue, settings.
+# All of it is reproducible from the source recordings.
+work/*
+
+# --- source recordings ------------------------------------------------------
+# Other people's audio and video: large, and not always ours to redistribute.
+audios/*
+videos/*
+!audios/.gitkeep
+!videos/.gitkeep
+
+# --- helper programs --------------------------------------------------------
+# Side tooling that is not part of the shipped program: the downloader, its
+# virtualenv and everything it fetches.
+helper_programs/
+
+# --- python ----------------------------------------------------------------
+.venv/
+**/.venv/
+__pycache__/
+*.pyc
+
+# --- editors and desktops ---------------------------------------------------
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# --- kept on purpose --------------------------------------------------------
+# The corrections collected while reviewing are the one thing here that cannot
+# be regenerated: each is a human decision made against the audio, and together
+# they are the training set for a future fine-tune. Keep them.
+!work/dataset/
+!work/dataset/**
+
+# The glossary is hand-written and small, and it changes what the engine hears,
+# so it is part of the project rather than output.
+!work/glossary.txt

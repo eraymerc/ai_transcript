@@ -1,10 +1,5 @@
 # ai_transcript
 
-Local Turkish transcript pipeline. Design and rationale:
-[`helper_programs/plans/turkish-transcript-pipeline.md`](helper_programs/plans/turkish-transcript-pipeline.md).
-
-Current state: **Stage 1 only** — media decoded to the PCM WAV that whisper.cpp
-requires. The ASR and correction stages are not built yet.
 
 ## Layout
 
